@@ -34,8 +34,8 @@ def return_items_from_req():
         item_list_html = result.find_all('li', class_="ad-listitem lazyload-item")
 
     #wenn ein error auftritt handle diesen
-    except:
-        print(timestamp() + 'web_request error was handled')
+    except Exception as e:
+        print(timestamp() + 'Error Exception: ' + str(e))
         item_list_html = ''
 
     #gebe die itemliste zurück
@@ -77,25 +77,28 @@ def update_item_list(item_list_html):
             #teile pricestr in wörter array
             item_price = item_price.split()
             
-            #wenn erstes "wort" eine nummer dann nehme es als wert, sonst 0
+            #wenn erstes "wort" eine nummer ist dann nehme es als wert, sonst 0
             if item_price[0].isdigit():
-                item_price = item_price[0]
+                item_price = int(item_price[0])
             else:
                 item_price = 0
 
-            #erstelle dictionary
-            item_dict = {'id': item_id, 'name': item_name, 'price': item_price}
+            #wenn preis im zielpreis dann nimm artikel, sonst skip
+            if (item_price >= minprice) & (item_price <= maxprice):
 
-            #hänge aktuelles dictionary an liste an
-            if item_dict not in item_list:
-                item_list.append(item_dict)
-                message = item_dict['name'] + '\n' + str(item_dict['price']) + '€'
+                #erstelle dictionary
+                item_dict = {'id': item_id, 'name': item_name, 'price': item_price}
 
-                item_link = "https://www.ebay-kleinanzeigen.de/s-anzeige/" + item_dict['id']
+                #hänge aktuelles dictionary an liste an
+                if item_dict not in item_list:
+                    item_list.append(item_dict)
+                    message = item_dict['name'] + '\n' + str(item_dict['price']) + '€'
 
-                print(timestamp() + 'sending bot_msg: ' + item_dict['name'] + ' | ' + str(item_dict['price']) + '€')
+                    item_link = "https://www.ebay-kleinanzeigen.de/s-anzeige/" + item_dict['id']
 
-                send_bot_msg(message + '\n' + item_link)
+                    print(timestamp() + 'sending bot_msg: ' + item_dict['name'] + ' | ' + str(item_dict['price']) + '€')
+
+                    send_bot_msg(message + '\n' + item_link)
 
     #als json abspeichern
     with open(filepath, 'w') as outfile:
@@ -106,8 +109,18 @@ def update_item_list(item_list_html):
 #searchterm input und ' ' durch '-' ersetzen
 searchterm = input(timestamp() + 'enter your searchterm: ').replace(' ', '-')
 
+#sleeptime input
+sleeptime = int(input(timestamp() + 'enter time(sec) to elapse between web-requests: '))
+
+#minprice input
+minprice = int(input(timestamp() + 'enter your lowest price: '))
+
+#maxprice input
+maxprice = int(input(timestamp() + 'enter your highest price: '))
+
+
 #filepath für dazugehörige json erstellen
-filepath = os.path.dirname(__file__) + '\\' + searchterm +'.json'
+filepath = os.path.dirname(__file__) + '\\data\\' + searchterm +'.json'
 
 # URL und Header für Webrequest
 reg_url = "https://www.ebay-kleinanzeigen.de/s-pc-zubehoer-software/" + searchterm + "/k0c225"
@@ -126,6 +139,11 @@ data = open(filepath, 'r')
 #lade json file in als artikel liste
 item_list = json.load(data)
 
+#BotMessage
+start_message = 'Starte Suche für \'' + searchterm + '\' zwischen ' + str(minprice) + '€ - ' + str(maxprice) + '€'
+send_bot_msg(start_message)
+print(timestamp() + 'sending bot_msg: ' + start_message)
+
 while True:
     try:
         # speichere die vorherige itemliste
@@ -141,7 +159,7 @@ while True:
             item_list = item_list_prev
 
     except Exception as e:
-        print(timestamp() + 'Error Exception: ' + e)
+        print(timestamp() + 'Error Exception: ' + str(e))
 
     #pause between iterations in seconds
-    time.sleep(10)
+    time.sleep(sleeptime)
