@@ -1,18 +1,15 @@
 from urllib.request import urlopen, Request
 from bs4 import BeautifulSoup
+import os.path
 import requests
 import json
 import time
 
-#suchanfrage
-searchterm = 'ryzen'
-filepath = 'C:\\Users\\User\\Desktop\\Workspace\\' + searchterm +'.json'
 
-# URL und Header für Webrequest
-reg_url = "https://www.ebay-kleinanzeigen.de/s-pc-zubehoer-software/" + searchterm + "/k0c225"
+#header für req
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.3'}
 
-
+#erstelle timestamp im format: [Wed Jan  6 15:44:14 2021]
 def timestamp():
     return '[' + time.asctime(time.localtime()) + '] '
 
@@ -29,18 +26,20 @@ def return_items_from_req():
     # finden der artikelliste in html
     result = soup.find('ul', {'id':'srchrslt-adtable', 'class':'itemlist-separatedbefore ad-list lazyload'})
 
+    #setze leere itemliste
     item_list_html = ''
 
     #Error Handling if HTML parse empty
     try:
         item_list_html = result.find_all('li', class_="ad-listitem lazyload-item")
 
+    #wenn ein error auftritt handle diesen
     except:
         print(timestamp() + 'web_request error was handled')
         item_list_html = ''
-    
-    return item_list_html
 
+    #gebe die itemliste zurück
+    return item_list_html
 
 
 def send_bot_msg(msg):
@@ -49,8 +48,10 @@ def send_bot_msg(msg):
     # meine chat id
     chat_id = '778752009'
 
-    #url
+    #url zusammenbauen
     url_req = "https://api.telegram.org/bot" + token + "/sendMessage" + "?chat_id=" + chat_id + "&text=" + msg
+
+    #req senden und resultate speichern
     results = requests.get(url_req)
     return results
 
@@ -65,18 +66,36 @@ def update_item_list(item_list_html):
     for item in item_list_html:  
     #finde id, name und price des artikels
         item_id = item.article['data-adid']
+
         item_name = item.find('div', class_="aditem-main").h2.a.text
+
         item_price = item.find('div', class_="aditem-details").strong.text
 
-        #erstelle dictionary
-        item_dict = {'id': item_id, 'name': item_name, 'price': item_price}
+        #wenn suchen im string, dann überspringe artikel
+        if not any("suche" in s for s in item_name.lower().split()): 
 
-        #hänge aktuelles dictionary an liste an
-        if item_dict not in item_list:
-            item_list.append(item_dict)
-            message = item_dict['id'] + '   ' + item_dict['name'] + '   ' + item_dict['price']
-            print(timestamp() + 'sending bot_msg: ' + message)
-            send_bot_msg(message)
+            #teile pricestr in wörter array
+            item_price = item_price.split()
+            
+            #wenn erstes "wort" eine nummer dann nehme es als wert, sonst 0
+            if item_price[0].isdigit():
+                item_price = item_price[0]
+            else:
+                item_price = 0
+
+            #erstelle dictionary
+            item_dict = {'id': item_id, 'name': item_name, 'price': item_price}
+
+            #hänge aktuelles dictionary an liste an
+            if item_dict not in item_list:
+                item_list.append(item_dict)
+                message = item_dict['name'] + '\n' + str(item_dict['price']) + '€'
+
+                item_link = "https://www.ebay-kleinanzeigen.de/s-anzeige/" + item_dict['id']
+
+                print(timestamp() + 'sending bot_msg: ' + item_dict['name'] + ' | ' + str(item_dict['price']) + '€')
+
+                send_bot_msg(message + '\n' + item_link)
 
     #als json abspeichern
     with open(filepath, 'w') as outfile:
@@ -84,8 +103,23 @@ def update_item_list(item_list_html):
 
 ##########################################################################################################
 
+#searchterm input und ' ' durch '-' ersetzen
+searchterm = input(timestamp() + 'enter your searchterm: ').replace(' ', '-')
+
+#filepath für dazugehörige json erstellen
+filepath = os.path.dirname(__file__) + '\\' + searchterm +'.json'
+
+# URL und Header für Webrequest
+reg_url = "https://www.ebay-kleinanzeigen.de/s-pc-zubehoer-software/" + searchterm + "/k0c225"
+
 #lade item liste
 print(timestamp() + 'init item_list')
+
+#wenn json file nicht existiert, dann erstelle diese
+if not os.path.isfile(filepath):
+    with open(filepath, "w") as text_file:
+        text_file.write("[]")
+
 #öffne json file zum lesen und schreiben
 data = open(filepath, 'r')
 
@@ -93,17 +127,21 @@ data = open(filepath, 'r')
 item_list = json.load(data)
 
 while True:
-    # speichere die vorherige itemliste
-    item_list_prev = item_list
-    item_list = return_items_from_req()
-    
-    #wenn sich itemliste ändert
-    if (item_list_prev != item_list) & (item_list != ''):
-        update_item_list(item_list)
+    try:
+        # speichere die vorherige itemliste
+        item_list_prev = item_list
+        item_list = return_items_from_req()
+        
+        #wenn sich itemliste ändert
+        if (item_list_prev != item_list) & (item_list != ''):
+            update_item_list(item_list)
 
-    #rollback to prev list
-    if item_list == '':
-        item_list = item_list_prev
+        #rollback to prev list
+        if item_list == '':
+            item_list = item_list_prev
+
+    except Exception as e:
+        print(timestamp() + 'Error Exception: ' + e)
 
     #pause between iterations in seconds
     time.sleep(10)
