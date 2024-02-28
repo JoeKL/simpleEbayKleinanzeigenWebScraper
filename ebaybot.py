@@ -44,7 +44,7 @@ def return_items_from_req():
 
 def send_bot_msg(msg):
     # bot token
-    token = '1526689152:AAHbUSuYCS9wZ9lP4CkgOvw7NpZkHtVQIZk'
+    token = ''
     # meine chat id
     chat_id = '778752009'
 
